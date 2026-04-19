@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barcodeAmplicon"
+version = "0.1.0"
+description = "Amplicon barcode processing (7mer barcodes): barcode reader + thresholding + plotting"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy",
+  "pandas",
+  "matplotlib",
+]
+
+[project.scripts]
+barcodeAmplicon-barcode-reader = "barcodes7mer.cli_barcode_reader:main"
+barcodeAmplicon-threshold-derivative = "barcodes7mer.cli_threshold_derivative:main"
+barcodeAmplicon-threshold-regression = "barcodes7mer.cli_threshold_regression:main"
+barcodeAmplicon-plot-threshold = "barcodes7mer.cli_plot_threshold:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["barcodes7mer*"]
