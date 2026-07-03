@@ -44,7 +44,14 @@ def remove_barcodes_one_off(
                 if mm <= 1:
                     df.write(
                         "\t".join(
-                            [run, values[i][1], str(values[i][0]), values[j][1], str(values[j][0]), str(mm)]
+                            [
+                                run,
+                                values[i][1],
+                                str(values[i][0]),
+                                values[j][1],
+                                str(values[j][0]),
+                                str(mm),
+                            ]
                         )
                         + "\n"
                     )
@@ -105,6 +112,7 @@ def endpoint_slopes(y: Sequence[float], window: int, *, shoulder: int = 0) -> Li
             continue
         left_idx1 = idx1 - window + 1
         slope[i] = (y[idx1 - 1] - y[left_idx1 - 1]) / float(window - 1)
+
     return slope
 
 
@@ -123,7 +131,13 @@ def derivative_of_slopes(s: Sequence[Optional[float]]) -> List[Optional[float]]:
     return d
 
 
-def rolling_slope(y: Sequence[float], window: int, *, shoulder: int = 0, python_compat: bool = True) -> List[Optional[float]]:
+def rolling_slope(
+    y: Sequence[float],
+    window: int,
+    *,
+    shoulder: int = 0,
+    python_compat: bool = True,
+) -> List[Optional[float]]:
     n = len(y)
     out: List[Optional[float]] = [None] * n
     if window <= 1 or n < 3:
@@ -142,6 +156,7 @@ def rolling_slope(y: Sequence[float], window: int, *, shoulder: int = 0, python_
     def sum_sq(a: int, b: int) -> float:
         def ss(k: int) -> float:
             return k * (k + 1) * (2 * k + 1) / 6.0
+
         return ss(b) - ss(a - 1)
 
     for i in range(n):
@@ -167,6 +182,7 @@ def rolling_slope(y: Sequence[float], window: int, *, shoulder: int = 0, python_
         start0, end0 = a - 1, b - 1
         sum_y = pref_y[end0 + 1] - pref_y[start0]
         sum_xy = pref_xy[end0 + 1] - pref_xy[start0]
+
         sum_x = sum_int(a, b)
         sum_x2 = sum_sq(a, b)
 
@@ -200,7 +216,13 @@ def fill_undef_with_last(vals: Sequence[Optional[float]]) -> List[float]:
     return out
 
 
-def argmin_defined_in_range(arr: Sequence[Optional[float]], *, start_idx1: int, stop_idx1: int, min_idx1: int) -> Optional[int]:
+def argmin_defined_in_range(
+    arr: Sequence[Optional[float]],
+    *,
+    start_idx1: int,
+    stop_idx1: int,
+    min_idx1: int,
+) -> Optional[int]:
     best_i = None
     best_v = None
     for i, v in enumerate(arr):
@@ -252,6 +274,86 @@ def build_chimera_percent_map_from_cwd() -> Dict[str, Dict[str, float]]:
     return chimera_percent(chim_counts)
 
 
+def _detect_input_kind(path: str) -> str:
+    """
+    Returns "mcounts" if file appears to be an mcounts TSV, else "reads".
+    """
+    import os
+
+    base = os.path.basename(path)
+    if base.endswith("_mcounts.tsv"):
+        return "mcounts"
+    if base.endswith("_reads.tsv"):
+        return "reads"
+
+    # fallback: inspect first non-empty line
+    try:
+        with open(path, "rt", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                cols = line.split("\t")
+                if cols and cols[0] == "run" and ("mcount" in cols):
+                    return "mcounts"
+                return "reads"
+    except OSError:
+        return "reads"
+
+
+def load_mcounts_tsv_with_run(path: str) -> Tuple[str, Dict[str, Dict[str, int]]]:
+    """
+    Reads mcounts TSV and returns (run_name, mc) where mc[qtag_id][barcode] = mcount.
+
+    Supported formats:
+      - headered:   run  qtag_id  barcode  mcount
+      - headerless: run  qtag_id  barcode  mcount
+      - headerless: qtag_id  barcode  mcount   (run_name falls back to filename)
+    """
+    import os
+
+    mc: Dict[str, Dict[str, int]] = {}
+    run_seen: Optional[str] = None
+    any_4col = False
+
+    with open(path, "rt", encoding="utf-8") as fh:
+        for line in fh:
+            line = line.rstrip("\n")
+            if not line:
+                continue
+            a = line.split("\t")
+            if a and a[0] == "run":
+                continue
+
+            if len(a) >= 4:
+                any_4col = True
+                run_s, qtag, bc, mcount_s = a[0], a[1], a[2], a[3]
+                if run_seen is None:
+                    run_seen = run_s
+                elif run_seen != run_s:
+                    raise ValueError(f"mcounts file contains multiple runs: {run_seen} and {run_s}")
+            elif len(a) == 3:
+                qtag, bc, mcount_s = a[0], a[1], a[2]
+            else:
+                continue
+
+            try:
+                mcount = int(mcount_s)
+            except ValueError:
+                continue
+
+            mc.setdefault(qtag, {})[bc] = mcount
+
+    if any_4col and run_seen is not None:
+        return run_seen, mc
+
+    base = os.path.basename(path)
+    run_fallback = os.path.splitext(base)[0]
+    if run_fallback.endswith("_mcounts"):
+        run_fallback = run_fallback[: -len("_mcounts")]
+    return run_fallback, mc
+
+
 def threshold_table_for_reads_file(
     reads_file: str,
     *,
@@ -276,20 +378,36 @@ def threshold_table_for_reads_file(
     base = os.path.basename(reads_file)
     run = base[: -len("_reads.tsv")] if base.endswith("_reads.tsv") else os.path.splitext(base)[0]
 
-    rd = load_reads_tsv(reads_file)
-    filter_umi_inplace(rd.data, rd.umi_counts, enabled=filter_umi)
-    mc = compute_mcounts(rd.data)
+    kind = _detect_input_kind(reads_file)
+
+    # ---- Load mcount table: mc[qtag][barcode] = mcount ----
+    if kind == "mcounts":
+        if filter_umi:
+            return run, [], "filter_umi_not_supported_for_mcounts"
+        run_from_file, mc = load_mcounts_tsv_with_run(reads_file)
+        run = run_from_file
+    else:
+        rd = load_reads_tsv(reads_file)
+        filter_umi_inplace(rd.data, rd.umi_counts, enabled=filter_umi)
+        mc = compute_mcounts(rd.data)
 
     values: List[Tuple[int, str, str]] = []
     for qtag, by_bc in mc.items():
         for bc, n in by_bc.items():
             if n and n > 0:
                 values.append((n, bc, qtag))
-    values.sort(key=lambda t: t[0], reverse=True)
+
+    # Deterministic ordering: count desc, then qtag, then barcode
+    values.sort(key=lambda t: (-t[0], t[2], t[1]))
 
     if assay_mode:
-        values = remove_barcodes_one_off(values, add_chimeras=add_chimeras, run=run, out_prefix=out_prefix_for_chimera_oneoff)
-        values.sort(key=lambda t: t[0], reverse=True)
+        values = remove_barcodes_one_off(
+            values,
+            add_chimeras=add_chimeras,
+            run=run,
+            out_prefix=out_prefix_for_chimera_oneoff,
+        )
+        values.sort(key=lambda t: (-t[0], t[2], t[1]))
 
     total = sum(v[0] for v in values)
     if total <= min_reads:
@@ -326,13 +444,12 @@ def threshold_table_for_reads_file(
 
     elif method == "regression":
         slope = rolling_slope(norm, window, shoulder=shoulder, python_compat=python_compat)
-
         slope_fill = fill_undef_with_last(slope)
         d_slope_all = derivative1_uniform(slope_fill)
         curvature = [d_slope_all[i] if slope[i] is not None else None for i in range(len(slope))]
 
         thr = compute_threshold(
-            series_for_argmin=slope,  # argmin(rolling slope), Perl-compatible
+            series_for_argmin=slope,  # argmin(rolling slope)
             window=window,
             n_points=len(values),
             shoulder=shoulder,
@@ -342,6 +459,7 @@ def threshold_table_for_reads_file(
             disable_when_window_le_1=True,
             min_start_idx1=(window if window > 1 else 1),
         )
+
     else:
         raise ValueError("method must be 'derivative' or 'regression'")
 
@@ -381,7 +499,20 @@ def threshold_table_for_reads_file(
 
 
 def write_threshold_tsv(out_path: str, all_rows: List[ThresholdRow], *, float_fmt: str) -> None:
-    header = ["run", "index", "qbid", "counts", "norm", "slope", "curvature", "percent", "percent_chimera", "is_threshold", "note"]
+    header = [
+        "run",
+        "index",
+        "qbid",
+        "counts",
+        "norm",
+        "slope",
+        "curvature",
+        "percent",
+        "percent_chimera",
+        "is_threshold",
+        "note",
+    ]
+
     with open(out_path, "wt", encoding="utf-8", newline="\n") as of:
         of.write("\t".join(header) + "\n")
         for r in all_rows:

@@ -19,6 +19,8 @@ barcodeAmplicon-barcode-reader = "barcodes7mer.cli_barcode_reader:main"
 barcodeAmplicon-threshold-derivative = "barcodes7mer.cli_threshold_derivative:main"
 barcodeAmplicon-threshold-regression = "barcodes7mer.cli_threshold_regression:main"
 barcodeAmplicon-plot-threshold = "barcodes7mer.cli_plot_threshold:main"
+barcodeAmplicon-extract-keys = "barcodes7mer.cli_extract_keys:main"
+barcodeAmplicon-reduce-mcounts = "barcodes7mer.cli_reduce_mcounts:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

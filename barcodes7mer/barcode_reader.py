@@ -11,7 +11,9 @@ from .util import hamming
 
 
 # IMPORTANT: corrected barcode motif to match your validated historical outputs
-BARCODE_RE_STR = r"CGA[ACTG]{3}C[ACTG]{4}AATTCGATGG"
+#BARCODE_RE_STR = r"CGA[ACTG]{3}C[ACTG]{4}AATTCGATGG"
+#update barcode to match any eight base string
+BARCODE_RE_STR = r"CGA[ACTG]{8}AATTCGATGG"
 MCOUNT_RE_STR  = r"[ATCG]{0,3}C[ACTG]{3}C[ACTG]{3}C[ACTG]{3}GCGCAACGCG"
 
 FULL_RE = re.compile(
