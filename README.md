@@ -18,24 +18,24 @@ pip install .
 
 ### Install in a conda environment
 
-To set up a conda environment with all dependencies for this package, run the following command:
+To set up a conda environment with all dependencies for this package, run from the project directory:
 
 ```bash
-conda create -n barcode_amplicon_env python=3.9 numpy pandas matplotlib -c conda-forge -y
+mamba env create -f environment.yml
 ```
 
-This creates a new environment named `barcode_amplicon_env` with Python 3.9 (meeting the minimum requirement) and installs the required dependencies (numpy, pandas, matplotlib) from the conda-forge channel.
+This creates an environment named `barcode_amplicon` with Python 3.11 and the required dependencies (numpy, pandas, matplotlib, pigz) from conda-forge. The Slurm scripts in `chunked_pooled_library_scripts/` activate this environment by name.
 
 After creating the environment, activate it with:
 
 ```bash
-conda activate barcode_amplicon_env
+mamba activate barcode_amplicon
 ```
 
-Then, install the package itself from the project directory:
+Then, install the package itself from the project directory. An editable install (`-e`) means a `git pull` updates the installed tools without reinstalling:
 
 ```bash
-pip install .
+pip install --no-deps -e .
 ```
 
 

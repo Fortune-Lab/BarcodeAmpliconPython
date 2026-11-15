@@ -1,0 +1,15 @@
+# barcode_amplicon: conda env for this package (Python 3.11, conda-forge).
+# barcodeamplicon itself is installed into it
+# editable (see README), so `git pull` updates it.
+name: barcode_amplicon
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - pandas
+  - matplotlib-base   # plots are written with savefig; no GUI backend needed
+  - pigz              # split_RUN.sbatch (also in /usr/bin)
+  - pip
+  - setuptools>=68
+  - wheel

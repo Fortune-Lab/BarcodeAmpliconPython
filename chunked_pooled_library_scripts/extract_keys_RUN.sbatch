@@ -11,7 +11,7 @@ set -euo pipefail
 : "${RUN:?Set RUN (e.g. bc_6)}"
 : "${WORK:?Set WORK (run workdir, e.g. /.../bc_6)}"
 module load python
-mamba activate barcode_amplicon_env_dev
+mamba activate barcode_amplicon
 
 CHUNKS=$WORK/chunks
 PARTS=128
